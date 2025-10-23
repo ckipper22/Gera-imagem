@@ -19,79 +19,83 @@ const getMimeType = (dataUrl: string): string => {
 };
 
 export const generateImage = async (
-  prompt: string,
-  sourceImageBase64: string
+    prompt: string,
+    sourceImageBase64: string
 ): Promise<string> => {
-  if (!process.env.API_KEY) {
-    throw new Error("A variável de ambiente API_KEY não está definida.");
-  }
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // CORREÇÃO: Usamos import.meta.env para ler variáveis de ambiente do Vite.
+    // A chave DEVE ser configurada no Vercel como VITE_API_KEY.
+    const API_KEY = import.meta.env.VITE_API_KEY;
 
-  const imagePart = {
-    inlineData: {
-      data: getBase64Data(sourceImageBase64),
-      mimeType: getMimeType(sourceImageBase64),
-    },
-  };
-
-  const textPart = {
-    text: prompt,
-  };
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: { parts: [imagePart, textPart] },
-    config: {
-      responseModalities: [Modality.IMAGE],
-    },
-  });
-
-  // Check for prompt feedback and safety blocks
-  if (response.promptFeedback?.blockReason) {
-    throw new Error(
-      `Sua solicitação foi bloqueada. Motivo: ${response.promptFeedback.blockReason}. Por favor, ajuste a imagem ou o texto.`
-    );
-  }
-
-  if (!response.candidates || response.candidates.length === 0) {
-    throw new Error("Nenhuma imagem foi gerada. A resposta do modelo estava vazia, possivelmente devido a filtros de segurança de conteúdo.");
-  }
-
-  const candidate = response.candidates[0];
-
-  if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-    let errorMessage = `A geração de imagem não foi concluída. Motivo: ${candidate.finishReason}.`;
-    
-    switch (candidate.finishReason) {
-        case 'SAFETY':
-            errorMessage = 'A imagem não pôde ser gerada porque o resultado violaria nossa política de segurança. Tente ajustar seu prompt ou imagem de origem.';
-            break;
-        case 'RECITATION':
-             errorMessage = 'A geração foi interrompida para evitar a repetição de conteúdo protegido. Por favor, modifique seu prompt.';
-             break;
-        case 'NO_IMAGE':
-            errorMessage = 'A IA não conseguiu criar uma imagem com base na sua solicitação. Isso pode acontecer com prompts ou imagens muito específicas ou complexas. Tente ser mais geral ou usar uma imagem de origem diferente.';
-            break;
-        default:
-             errorMessage = `A geração de imagem falhou por um motivo inesperado (${candidate.finishReason}). Por favor, tente novamente.`;
+    if (!API_KEY) {
+        throw new Error("A variável de ambiente VITE_API_KEY não está definida. Por favor, configure a chave no Vercel.");
     }
-    throw new Error(errorMessage);
-  }
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-  if (!candidate.content || !candidate.content.parts) {
-      throw new Error("A resposta não continha conteúdo de imagem. Isso pode ser devido a políticas de segurança.");
-  }
+    const imagePart = {
+        inlineData: {
+            data: getBase64Data(sourceImageBase64),
+            mimeType: getMimeType(sourceImageBase64),
+        },
+    };
 
+    const textPart = {
+        text: prompt,
+    };
 
-  for (const part of candidate.content.parts) {
-    if (part.inlineData) {
-      const base64ImageBytes: string = part.inlineData.data;
-      const mimeType = part.inlineData.mimeType;
-      return `data:${mimeType};base64,${base64ImageBytes}`;
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [imagePart, textPart] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    // Check for prompt feedback and safety blocks
+    if (response.promptFeedback?.blockReason) {
+        throw new Error(
+            `Sua solicitação foi bloqueada. Motivo: ${response.promptFeedback.blockReason}. Por favor, ajuste a imagem ou o texto.`
+        );
     }
-  }
 
-  throw new Error("Nenhuma imagem foi encontrada na resposta da API. A resposta pode ter sido bloqueada por políticas de segurança.");
+    if (!response.candidates || response.candidates.length === 0) {
+        throw new Error("Nenhuma imagem foi gerada. A resposta do modelo estava vazia, possivelmente devido a filtros de segurança de conteúdo.");
+    }
+
+    const candidate = response.candidates[0];
+
+    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+        let errorMessage = `A geração de imagem não foi concluída. Motivo: ${candidate.finishReason}.`;
+        
+        switch (candidate.finishReason) {
+            case 'SAFETY':
+                errorMessage = 'A imagem não pôde ser gerada porque o resultado violaria nossa política de segurança. Tente ajustar seu prompt ou imagem de origem.';
+                break;
+            case 'RECITATION':
+                errorMessage = 'A geração foi interrompida para evitar a repetição de conteúdo protegido. Por favor, modifique seu prompt.';
+                break;
+            case 'NO_IMAGE':
+                errorMessage = 'A IA não conseguiu criar uma imagem com base na sua solicitação. Isso pode acontecer com prompts ou imagens muito específicas ou complexas. Tente ser mais geral ou usar uma imagem de origem diferente.';
+                break;
+            default:
+                errorMessage = `A geração de imagem falhou por um motivo inesperado (${candidate.finishReason}). Por favor, tente novamente.`;
+        }
+        throw new Error(errorMessage);
+    }
+
+    if (!candidate.content || !candidate.content.parts) {
+        throw new Error("A resposta não continha conteúdo de imagem. Isso pode ser devido a políticas de segurança.");
+    }
+
+
+    for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType;
+            return `data:${mimeType};base64,${base64ImageBytes}`;
+        }
+    }
+
+    throw new Error("Nenhuma imagem foi encontrada na resposta da API. A resposta pode ter sido bloqueada por políticas de segurança.");
 };
 
 
@@ -99,10 +103,13 @@ export const improvePrompt = async (
     currentPrompt: string,
     context: string
 ): Promise<string> => {
-    if (!process.env.API_KEY) {
-        throw new Error("A variável de ambiente API_KEY não está definida.");
+    // CORREÇÃO: Usamos import.meta.env para ler variáveis de ambiente do Vite.
+    const API_KEY = import.meta.env.VITE_API_KEY;
+
+    if (!API_KEY) {
+        throw new Error("A variável de ambiente VITE_API_KEY não está definida.");
     }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
     
     const systemInstruction = `Você é um assistente de IA especialista em criar prompts para geração de imagens. Sua tarefa é melhorar o prompt do usuário.
     - O contexto geral é: "${context}".
