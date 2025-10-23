@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Gerador de Imagens para E-commerce",
+  "description": "Um aplicativo para gerar imagens de produtos para plataformas como Mercado Livre, Facebook e Instagram, usando uma imagem de referência e personalizando o estilo.",
+  "requestFramePermissions": []
+}
